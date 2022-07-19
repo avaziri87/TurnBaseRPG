@@ -1,53 +1,84 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 public class Unit : MonoBehaviour
 {
-    Vector3 _targetPosition;
+    const int _ActionPointsMax = 2;
+
+    public static event EventHandler OnAnyActionPointsChange;
     GridPosition _gridPosition;
-
-    [SerializeField] Animator _animator;
-
-    [SerializeField] float _moveSpeed = 4.0f;
-    [SerializeField] float _stopDistance = 0.1f;
-    [SerializeField] float _turnSpeed = 1;
+    MoveAction _moveAction;
+    SpinAction _spinAction;
+    BaseAction[] _baseActionArray;
+    int _actionPoints = _ActionPointsMax;
 
     private void Awake()
     {
-        _targetPosition = transform.position;
+        _moveAction = GetComponent<MoveAction>();
+        _spinAction = GetComponent<SpinAction>();
+        _baseActionArray = GetComponents<BaseAction>();
     }
     private void Start()
     {
         _gridPosition = LevelGrid.Instance.GetGridPosition(transform.position);
         LevelGrid.Instance.AddUnitAtGridPosition(_gridPosition, this);
+        TurnSystem.Instance.OnTurnChange += TurnSystem_OnTurnChange;
     }
     private void Update()
     {
-        Vector3 moveDirection = (_targetPosition - transform.position).normalized;
-        Vector3.Distance(transform.position, _targetPosition);
-        if(Vector3.Distance(transform.position, _targetPosition) > _stopDistance)
-        {
-            _animator.SetBool("IsWalking", true);
-            transform.position += moveDirection * Time.deltaTime * _moveSpeed;
-            transform.forward = Vector3.Lerp(transform.forward, moveDirection, _turnSpeed);
-        }
-        else
-        {
-            _animator.SetBool("IsWalking", false);
-        }
-
         GridPosition newGridPosition = LevelGrid.Instance.GetGridPosition(transform.position);
-        Debug.Log(newGridPosition.ToString());
         if(newGridPosition != _gridPosition)
         {
             LevelGrid.Instance.UnitMoveGridPosition(this, _gridPosition, newGridPosition);
             _gridPosition = newGridPosition;
         }
     }
-
-    public void Move()
+    public MoveAction GetMoveAction()
     {
-        _targetPosition = MouseWorld.GetMousePosition();
+        return _moveAction;
+    }
+    public SpinAction GetSpinAction()
+    {
+        return _spinAction;
+    }
+    public GridPosition GetGridPosition()
+    {
+        return _gridPosition;
+    }
+    public BaseAction[] GetBaseActionArray()
+    {
+        return _baseActionArray;
+    }
+    public bool CanSpendActionPointsForAction(BaseAction baseAction)
+    {
+        return _actionPoints >= baseAction.GetActionCost();
+    }
+    void SpendActionPoints(int amount)
+    {
+        _actionPoints -= amount;
+        OnAnyActionPointsChange?.Invoke(this, EventArgs.Empty);
+    }
+    public bool TrySpendActionPointsToTakeAction(BaseAction baseAction)
+    {
+        if(CanSpendActionPointsForAction(baseAction))
+        {
+            SpendActionPoints(baseAction.GetActionCost());
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+    public int GetActionPoints()
+    {
+        return _actionPoints;
+    }
+    private void TurnSystem_OnTurnChange(object sender, EventArgs e)
+    {
+        _actionPoints = _ActionPointsMax;
+        OnAnyActionPointsChange?.Invoke(this, EventArgs.Empty);
     }
 }
